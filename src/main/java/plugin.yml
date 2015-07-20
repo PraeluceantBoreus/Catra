@@ -2,3 +2,7 @@ name: Catra
 version: 0.0.1
 author: Richard Stöckl
 main: io.github.praeluceantboreus.catra.main.CatraPlugin
+commands:
+  spawnv:
+    description: spawns a villager on a random location
+    usage: /spawnv
