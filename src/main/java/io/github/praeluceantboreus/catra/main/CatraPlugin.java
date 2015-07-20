@@ -3,6 +3,8 @@ package io.github.praeluceantboreus.catra.main;
 import io.github.praeluceantboreus.catra.serialize.Coords;
 import io.github.praeluceantboreus.catra.serialize.Coords.Position;
 import io.github.praeluceantboreus.catra.serialize.ListMode;
+import io.github.praeluceantboreus.catra.trading.Offer;
+import io.github.praeluceantboreus.catra.trading.TradeItemStack;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -10,28 +12,36 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class CatraPlugin extends JavaPlugin
 {
 
 	private Coords coordinateManager;
+	private HashMap<Entity, Offer> offers;
 
 	@Override
 	public void onEnable()
 	{
+		super.onEnable();
 		genConfig();
 		coordinateManager = Coords.deserialize(getConfig().getConfigurationSection("worlds"), getServer());
-		super.onEnable();
+		offers = new HashMap<>();
+		generateNewTraders();
+		System.out.println(offers);
 	}
 
 	@Override
@@ -100,6 +110,54 @@ public class CatraPlugin extends JavaPlugin
 			getConfig().addDefault("trader.atmosphere.whitelist", whitelistString);
 			getConfig().addDefault("trader.atmosphere.blacklist", blacklistString);
 			getConfig().addDefault("trader.atmosphere.listmode", ListMode.WHITELIST.toString());
+		}
+		{
+			ArrayList<Map<String, Object>> buys = new ArrayList<>();
+			buys.add(new TradeItemStack(new ItemStack(Material.STONE, 32), 64).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.WOOD, 16), 48).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.COAL, 16), 32).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.CARROT_ITEM, 48), 64).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.POTATO_ITEM, 48), 64).serialize());
+			getConfig().addDefault("trader.buys", buys);
+		}
+		{
+			ArrayList<Map<String, Object>> sells = new ArrayList<>();
+			sells.add(new TradeItemStack(new ItemStack(Material.SAND, 32), 64).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.GRAVEL, 32), 64).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.IRON_INGOT, 6), 9).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.NETHER_WARTS, 6), 9).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.CARROT_ITEM, 6), 9).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.POTATO_ITEM, 6), 9).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.SUGAR_CANE, 6), 9).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.BLAZE_ROD, 2), 5).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.LAVA_BUCKET, 1), 3).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.WATER_BUCKET, 1), 9).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.SAPLING, 8, (short) 0), 16).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.SAPLING, 8, (short) 1), 16).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.SAPLING, 8, (short) 2), 16).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.SAPLING, 8, (short) 3), 16).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.SAPLING, 8, (short) 4), 16).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.SAPLING, 8, (short) 5), 16).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.SLIME_BALL, 3), 9).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.GLOWSTONE_DUST, 16), 32).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.REDSTONE, 16), 32).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.MELON_BLOCK, 2), 5).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.PUMPKIN, 2), 5).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.GRASS, 48), 64).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.GRASS, 48), 64).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.WATER_LILY, 8), 16).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.RED_MUSHROOM, 8), 16).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.BROWN_MUSHROOM, 8), 16).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.CACTUS, 8), 12).serialize());
+			getConfig().addDefault("trader.sells", sells);
+		}
+		{
+			ArrayList<String> names = new ArrayList<>();
+			names.add(ChatColor.DARK_BLUE + "Gernot");
+			names.add(ChatColor.DARK_RED + "Heinrich");
+			names.add(ChatColor.GOLD + "Thomas");
+			names.add(ChatColor.DARK_GREEN + "Joseph");
+			getConfig().addDefault("trader.names", names);
 		}
 		getConfig().options().copyDefaults(true);
 		saveConfig();
@@ -217,13 +275,31 @@ public class CatraPlugin extends JavaPlugin
 	public void generateNewTraders()
 	{
 		int amount = getConfig().getInt("trader.amount");
+		offers.clear();
 		for (String worldName : getConfig().getConfigurationSection("worlds").getValues(false).keySet())
 		{
 			for (int i = 0; i < amount; i++)
 			{
 				World world = getServer().getWorld(worldName);
-				world.spawnEntity(getNextLocation(world), EntityType.VILLAGER);
+				Entity entitiy = world.spawnEntity(getNextLocation(world), EntityType.VILLAGER);
+				offers.put(entitiy, generateOffer());
 			}
 		}
+	}
+
+	public Offer generateOffer()
+	{
+		return new Offer(getTraderItem("trader.buys").toItemStack(), getTraderItem("trader.sells").toItemStack());
+	}
+
+	public TradeItemStack getTraderItem(String path)
+	{
+		ConfigurationSection cs = getConfig().getConfigurationSection(path);
+		List<Map<?, ?>> list = cs.getMapList(path);
+		ArrayList<Map<?, ?>> arrlist = new ArrayList<>(list);
+		Collections.shuffle(arrlist);
+		if (arrlist.size() >= 1)
+			return TradeItemStack.deserialize(arrlist.get(0));
+		return null;
 	}
 }
