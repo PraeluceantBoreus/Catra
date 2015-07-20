@@ -58,7 +58,6 @@ public class Coords implements ConfigurationSerializable
 
 	public static Coords deserialize(ConfigurationSection cs, Server server)
 	{
-		System.out.println(cs);
 		Coords ret = new Coords();
 		for (String worldName : cs.getValues(false).keySet())
 		{
@@ -83,19 +82,24 @@ public class Coords implements ConfigurationSerializable
 		loc.setZ(loc.getBlockZ());
 	}
 
+	public HashMap<Position, Location> getWorldBounds(World world)
+	{
+		return locations.get(world);
+	}
+
 	@Override
 	public String toString()
 	{
 		return locations.toString();
 	}
-}
 
-enum Position
-{
-	MIN, MAX
-}
+	public static enum Position
+	{
+		MIN, MAX
+	}
 
-enum Coordinate
-{
-	X, Y, Z
+	public static enum Coordinate
+	{
+		X, Y, Z
+	}
 }
