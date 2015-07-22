@@ -5,6 +5,7 @@ import io.github.praeluceantboreus.catra.serialize.Coords.Position;
 import io.github.praeluceantboreus.catra.serialize.ListMode;
 import io.github.praeluceantboreus.catra.trading.Offer;
 import io.github.praeluceantboreus.catra.trading.TradeItemStack;
+import io.github.praeluceantboreus.catra.utils.Container;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,7 +21,6 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
@@ -32,6 +32,12 @@ public class CatraPlugin extends JavaPlugin
 
 	private Coords coordinateManager;
 	private HashMap<Entity, Offer> offers;
+	private Container<String> atmosphereWhitelist;
+	private Container<String> atmosphereBlacklist;
+	private Container<String> groundWhitelist;
+	private Container<String> groundBlacklist;
+	private ListMode atmosphereMode;
+	private ListMode groundMode;
 
 	@Override
 	public void onEnable()
@@ -40,8 +46,14 @@ public class CatraPlugin extends JavaPlugin
 		genConfig();
 		coordinateManager = Coords.deserialize(getConfig().getConfigurationSection("worlds"), getServer());
 		offers = new HashMap<>();
-		generateNewTraders();
-		System.out.println(offers);
+		atmosphereWhitelist = new Container<String>(getConfig().getStringList("trader.atmosphere.whitelist"));
+		atmosphereBlacklist = new Container<String>(getConfig().getStringList("trader.atmosphere.blacklist"));
+		groundWhitelist = new Container<String>(getConfig().getStringList("trader.ground.whitelist"));
+		groundBlacklist = new Container<String>(getConfig().getStringList("trader.ground.blacklist"));
+		atmosphereMode = ListMode.valueOf(getConfig().getString("trader.atmosphere.listmode"));
+		groundMode = ListMode.valueOf(getConfig().getString("trader.ground.listmode"));
+		// generateNewTraders();
+		// System.out.println(offers);
 	}
 
 	@Override
@@ -55,6 +67,13 @@ public class CatraPlugin extends JavaPlugin
 				return false;
 			Player p = (Player) sender;
 			System.out.println(p);
+			return true;
+		}
+		case "newloc":
+		{
+			if (args.length < 1)
+				return false;
+			background(args);
 			return true;
 		}
 		default:
@@ -193,17 +212,11 @@ public class CatraPlugin extends JavaPlugin
 
 	public boolean isSafe(Location loc)
 	{
-		ListMode atmosphereMode = ListMode.valueOf(getConfig().getString("trader.atmosphere.listmode"));
-		ArrayList<String> atmosphereWhitelist = new ArrayList<>(getConfig().getStringList("trader.atmosphere.whitelist"));
-		ArrayList<String> atmosphereBlacklist = new ArrayList<>(getConfig().getStringList("trader.atmosphere.blacklist"));
 		if ((atmosphereMode.equals(ListMode.WHITELIST) && atmosphereWhitelist.contains(loc.getBlock().getType().toString())) || (atmosphereMode.equals(ListMode.BLACKLIST) && !atmosphereBlacklist.contains(loc.getBlock().getType().toString())))
 		{
 			Material above = loc.clone().add(0, 1, 0).getBlock().getType();
 			if ((atmosphereMode.equals(ListMode.WHITELIST) && atmosphereWhitelist.contains(above.toString())) || (atmosphereMode.equals(ListMode.BLACKLIST) && !atmosphereBlacklist.contains(above.toString())))
 			{
-				ListMode groundMode = ListMode.valueOf(getConfig().getString("trader.ground.listmode"));
-				ArrayList<String> groundWhitelist = new ArrayList<>(getConfig().getStringList("trader.ground.whitelist"));
-				ArrayList<String> groundBlacklist = new ArrayList<>(getConfig().getStringList("trader.ground.blacklist"));
 				String ground = loc.clone().add(0, -1, 0).getBlock().getType().toString();
 				if ((groundMode.equals(ListMode.WHITELIST) && groundWhitelist.contains(ground)) || (groundMode.equals(ListMode.BLACKLIST) && !groundBlacklist.contains(ground)))
 				{
@@ -217,9 +230,11 @@ public class CatraPlugin extends JavaPlugin
 	public ArrayList<Location> getSaveLocatationsBetween(Location loc1, Location loc2)
 	{
 		ArrayList<Location> ret = new ArrayList<>();
+		System.out.println("Begin between");
 		for (Location loc : getLocationsBetween(loc1, loc2))
 			if (isSafe(loc))
 				ret.add(loc);
+		System.out.println("end between");
 		return ret;
 	}
 
@@ -243,6 +258,7 @@ public class CatraPlugin extends JavaPlugin
 				}
 			}
 		}
+		System.out.println("all locs");
 		return ret;
 	}
 
@@ -276,11 +292,10 @@ public class CatraPlugin extends JavaPlugin
 	{
 		int amount = getConfig().getInt("trader.amount");
 		offers.clear();
-		for (String worldName : getConfig().getConfigurationSection("worlds").getValues(false).keySet())
+		for (World world : getTraderWorlds())
 		{
 			for (int i = 0; i < amount; i++)
 			{
-				World world = getServer().getWorld(worldName);
 				Entity entitiy = world.spawnEntity(getNextLocation(world), EntityType.VILLAGER);
 				offers.put(entitiy, generateOffer());
 			}
@@ -294,12 +309,50 @@ public class CatraPlugin extends JavaPlugin
 
 	public TradeItemStack getTraderItem(String path)
 	{
-		ConfigurationSection cs = getConfig().getConfigurationSection(path);
-		List<Map<?, ?>> list = cs.getMapList(path);
+		List<Map<?, ?>> list = getConfig().getMapList(path);
 		ArrayList<Map<?, ?>> arrlist = new ArrayList<>(list);
 		Collections.shuffle(arrlist);
 		if (arrlist.size() >= 1)
 			return TradeItemStack.deserialize(arrlist.get(0));
 		return null;
 	}
+
+	public ArrayList<World> getTraderWorlds()
+	{
+		ArrayList<World> worlds = new ArrayList<>();
+		for (String worldName : getConfig().getConfigurationSection("worlds").getValues(false).keySet())
+			worlds.add(getServer().getWorld(worldName));
+		return worlds;
+	}
+
+	public ArrayList<String> getNames()
+	{
+		return new ArrayList<>(getConfig().getStringList("trader.names"));
+	}
+
+	public void background(final String[] args)
+	{
+		// long ticks = getConfig().getLong("trader.interval") / 1000 * 20;
+		/*
+		 * BukkitRunnable br = new BukkitRunnable() {
+		 * 
+		 * @Override public void run() {
+		 */
+		for (int i = 0; i < Integer.parseInt(args[0]); i++)
+		{
+			for (World world : getTraderWorlds())
+			{
+				System.out.println(world.getName() + ": " + getNextLocation(world));
+			}
+		}
+		/*
+		 * } }; br.runTaskAsynchronously(this);
+		 */
+	}
+
+	public void print(final String[] args)
+	{
+
+	}
+
 }
