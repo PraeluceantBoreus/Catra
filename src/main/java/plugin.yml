@@ -9,3 +9,6 @@ commands:
   newloc:
     description: get Location
     usage: /newloc <amount>
+  async:
+    description: async
+    usage: /async

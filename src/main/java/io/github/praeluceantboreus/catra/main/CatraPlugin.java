@@ -5,13 +5,13 @@ import io.github.praeluceantboreus.catra.serialize.Coords.Position;
 import io.github.praeluceantboreus.catra.serialize.ListMode;
 import io.github.praeluceantboreus.catra.trading.Offer;
 import io.github.praeluceantboreus.catra.trading.TradeItemStack;
-import io.github.praeluceantboreus.catra.utils.Container;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -26,16 +26,17 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
 
 public class CatraPlugin extends JavaPlugin
 {
 
 	private Coords coordinateManager;
 	private HashMap<Entity, Offer> offers;
-	private Container<String> atmosphereWhitelist;
-	private Container<String> atmosphereBlacklist;
-	private Container<String> groundWhitelist;
-	private Container<String> groundBlacklist;
+	private HashSet<String> atmosphereWhitelist;
+	private HashSet<String> atmosphereBlacklist;
+	private HashSet<String> groundWhitelist;
+	private HashSet<String> groundBlacklist;
 	private ListMode atmosphereMode;
 	private ListMode groundMode;
 
@@ -46,10 +47,10 @@ public class CatraPlugin extends JavaPlugin
 		genConfig();
 		coordinateManager = Coords.deserialize(getConfig().getConfigurationSection("worlds"), getServer());
 		offers = new HashMap<>();
-		atmosphereWhitelist = new Container<String>(getConfig().getStringList("trader.atmosphere.whitelist"));
-		atmosphereBlacklist = new Container<String>(getConfig().getStringList("trader.atmosphere.blacklist"));
-		groundWhitelist = new Container<String>(getConfig().getStringList("trader.ground.whitelist"));
-		groundBlacklist = new Container<String>(getConfig().getStringList("trader.ground.blacklist"));
+		atmosphereWhitelist = new HashSet<String>(getConfig().getStringList("trader.atmosphere.whitelist"));
+		atmosphereBlacklist = new HashSet<String>(getConfig().getStringList("trader.atmosphere.blacklist"));
+		groundWhitelist = new HashSet<String>(getConfig().getStringList("trader.ground.whitelist"));
+		groundBlacklist = new HashSet<String>(getConfig().getStringList("trader.ground.blacklist"));
 		atmosphereMode = ListMode.valueOf(getConfig().getString("trader.atmosphere.listmode"));
 		groundMode = ListMode.valueOf(getConfig().getString("trader.ground.listmode"));
 		// generateNewTraders();
@@ -57,7 +58,7 @@ public class CatraPlugin extends JavaPlugin
 	}
 
 	@Override
-	public boolean onCommand(CommandSender sender, Command command, String label, String[] args)
+	public boolean onCommand(CommandSender sender, Command command, String label, final String[] args)
 	{
 		switch (label)
 		{
@@ -73,7 +74,22 @@ public class CatraPlugin extends JavaPlugin
 		{
 			if (args.length < 1)
 				return false;
-			background(args);
+			BukkitRunnable br = new BukkitRunnable()
+			{
+				
+				@Override
+				public void run()
+				{
+					background(args);
+					
+				}
+			};
+			br.runTaskAsynchronously(this);
+			return true;
+		}
+		case "async":
+		{
+			print();
 			return true;
 		}
 		default:
@@ -350,9 +366,41 @@ public class CatraPlugin extends JavaPlugin
 		 */
 	}
 
-	public void print(final String[] args)
+	public void print()
 	{
+		//final Location loc = new Location(getTraderWorlds().get(0), 5, 1, 15);
+		BukkitRunnable br = new BukkitRunnable()
+		{
 
+			@Override
+			public void run()
+			{
+				BukkitRunnable sync = new BukkitRunnable()
+				{
+
+					@Override
+					public void run()
+					{
+						//generateNewTraders();
+						System.out.println("beg");
+					}
+				};
+				sync.runTask(CatraPlugin.this);
+				while(true)
+				{
+					System.out.println("baum");
+					try
+					{
+						Thread.sleep(50000);
+					} catch (InterruptedException e)
+					{
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
+			}
+		};
+		br.runTaskLaterAsynchronously(this, 0);
 	}
 
 }
