@@ -1,5 +1,6 @@
 package io.github.praeluceantboreus.catra.main;
 
+import io.github.praeluceantboreus.catra.multicore.LocationChecker;
 import io.github.praeluceantboreus.catra.serialize.Coords;
 import io.github.praeluceantboreus.catra.serialize.Coords.Position;
 import io.github.praeluceantboreus.catra.serialize.ListMode;
@@ -14,6 +15,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -39,6 +42,7 @@ public class CatraPlugin extends JavaPlugin
 	private HashSet<String> groundBlacklist;
 	private ListMode atmosphereMode;
 	private ListMode groundMode;
+	private LocationChecker lifeSafer;
 
 	@Override
 	public void onEnable()
@@ -53,6 +57,7 @@ public class CatraPlugin extends JavaPlugin
 		groundBlacklist = new HashSet<String>(getConfig().getStringList("trader.ground.blacklist"));
 		atmosphereMode = ListMode.valueOf(getConfig().getString("trader.atmosphere.listmode"));
 		groundMode = ListMode.valueOf(getConfig().getString("trader.ground.listmode"));
+		lifeSafer = new LocationChecker(atmosphereWhitelist, atmosphereBlacklist, groundWhitelist, groundBlacklist, atmosphereMode, groundMode);
 		// generateNewTraders();
 		// System.out.println(offers);
 	}
@@ -76,12 +81,12 @@ public class CatraPlugin extends JavaPlugin
 				return false;
 			BukkitRunnable br = new BukkitRunnable()
 			{
-				
+
 				@Override
 				public void run()
 				{
 					background(args);
-					
+
 				}
 			};
 			br.runTaskAsynchronously(this);
@@ -226,30 +231,34 @@ public class CatraPlugin extends JavaPlugin
 		return locs.get(0);
 	}
 
-	public boolean isSafe(Location loc)
+	public boolean isSafe(final Location loc) throws InterruptedException, ExecutionException
 	{
-		if ((atmosphereMode.equals(ListMode.WHITELIST) && atmosphereWhitelist.contains(loc.getBlock().getType().toString())) || (atmosphereMode.equals(ListMode.BLACKLIST) && !atmosphereBlacklist.contains(loc.getBlock().getType().toString())))
-		{
-			Material above = loc.clone().add(0, 1, 0).getBlock().getType();
-			if ((atmosphereMode.equals(ListMode.WHITELIST) && atmosphereWhitelist.contains(above.toString())) || (atmosphereMode.equals(ListMode.BLACKLIST) && !atmosphereBlacklist.contains(above.toString())))
-			{
-				String ground = loc.clone().add(0, -1, 0).getBlock().getType().toString();
-				if ((groundMode.equals(ListMode.WHITELIST) && groundWhitelist.contains(ground)) || (groundMode.equals(ListMode.BLACKLIST) && !groundBlacklist.contains(ground)))
-				{
-					return true;
-				}
-			}
-		}
-		return false;
+		lifeSafer.setLoc(loc);
+		Future<Boolean> retFut = getServer().getScheduler().callSyncMethod(this, lifeSafer);
+		return retFut.get();
 	}
 
 	public ArrayList<Location> getSaveLocatationsBetween(Location loc1, Location loc2)
 	{
 		ArrayList<Location> ret = new ArrayList<>();
 		System.out.println("Begin between");
+		int i = 0;
 		for (Location loc : getLocationsBetween(loc1, loc2))
-			if (isSafe(loc))
-				ret.add(loc);
+		{
+			if (i % 1000 == 1)
+				System.out.println("Davor: " + System.currentTimeMillis());
+			try
+			{
+				if (isSafe(loc))
+					ret.add(loc);
+			} catch (InterruptedException | ExecutionException e)
+			{
+				e.printStackTrace();
+			}
+			if (i % 1000 == 0)
+				System.out.println("Dannach: " + System.currentTimeMillis());
+			i++;
+		}
 		System.out.println("end between");
 		return ret;
 	}
@@ -368,7 +377,8 @@ public class CatraPlugin extends JavaPlugin
 
 	public void print()
 	{
-		//final Location loc = new Location(getTraderWorlds().get(0), 5, 1, 15);
+		// final Location loc = new Location(getTraderWorlds().get(0), 5, 1,
+		// 15);
 		BukkitRunnable br = new BukkitRunnable()
 		{
 
@@ -381,12 +391,12 @@ public class CatraPlugin extends JavaPlugin
 					@Override
 					public void run()
 					{
-						//generateNewTraders();
+						// generateNewTraders();
 						System.out.println("beg");
 					}
 				};
 				sync.runTask(CatraPlugin.this);
-				while(true)
+				while (true)
 				{
 					System.out.println("baum");
 					try
