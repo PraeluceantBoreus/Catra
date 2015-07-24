@@ -36,10 +36,8 @@ public class CatraPlugin extends JavaPlugin
 
 	private Coords coordinateManager;
 	private HashMap<Entity, Offer> offers;
-	private HashSet<String> atmosphereWhitelist;
-	private HashSet<String> atmosphereBlacklist;
-	private HashSet<String> groundWhitelist;
-	private HashSet<String> groundBlacklist;
+	private HashSet<String> atmospherelist;
+	private HashSet<String> groundlist;
 	private ListMode atmosphereMode;
 	private ListMode groundMode;
 	private LocationChecker lifeSafer;
@@ -51,13 +49,11 @@ public class CatraPlugin extends JavaPlugin
 		genConfig();
 		coordinateManager = Coords.deserialize(getConfig().getConfigurationSection("worlds"), getServer());
 		offers = new HashMap<>();
-		atmosphereWhitelist = new HashSet<String>(getConfig().getStringList("trader.atmosphere.whitelist"));
-		atmosphereBlacklist = new HashSet<String>(getConfig().getStringList("trader.atmosphere.blacklist"));
-		groundWhitelist = new HashSet<String>(getConfig().getStringList("trader.ground.whitelist"));
-		groundBlacklist = new HashSet<String>(getConfig().getStringList("trader.ground.blacklist"));
+		atmospherelist = new HashSet<String>(getConfig().getStringList("trader.atmosphere.list"));
+		groundlist = new HashSet<String>(getConfig().getStringList("trader.ground.list"));
 		atmosphereMode = ListMode.valueOf(getConfig().getString("trader.atmosphere.listmode"));
 		groundMode = ListMode.valueOf(getConfig().getString("trader.ground.listmode"));
-		lifeSafer = new LocationChecker(atmosphereWhitelist, atmosphereBlacklist, groundWhitelist, groundBlacklist, atmosphereMode, groundMode);
+		lifeSafer = new LocationChecker(atmospherelist, groundlist, atmosphereMode.equals(ListMode.WHITELIST), groundMode.equals(ListMode.WHITELIST));
 		// generateNewTraders();
 		// System.out.println(offers);
 	}
@@ -199,6 +195,9 @@ public class CatraPlugin extends JavaPlugin
 			names.add(ChatColor.DARK_GREEN + "Joseph");
 			getConfig().addDefault("trader.names", names);
 		}
+		getConfig().addDefault("advanced.inithashsize", "");
+		getConfig().addDefault("advanced.maxloadfactor", 0.75);
+		getConfig().addDefault("advaced.randomclustersize", 9);
 		getConfig().options().copyDefaults(true);
 		saveConfig();
 	}
