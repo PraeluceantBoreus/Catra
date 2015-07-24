@@ -41,6 +41,7 @@ public class CatraPlugin extends JavaPlugin
 	private ListMode atmosphereMode;
 	private ListMode groundMode;
 	private LocationChecker lifeSafer;
+	private int clusterSize;
 
 	@Override
 	public void onEnable()
@@ -54,6 +55,7 @@ public class CatraPlugin extends JavaPlugin
 		atmosphereMode = ListMode.valueOf(getConfig().getString("trader.atmosphere.listmode"));
 		groundMode = ListMode.valueOf(getConfig().getString("trader.ground.listmode"));
 		lifeSafer = new LocationChecker(atmospherelist, groundlist, atmosphereMode.equals(ListMode.WHITELIST), groundMode.equals(ListMode.WHITELIST));
+		clusterSize = getConfig().getInt("advanced.randomclustersize", 100);
 		// generateNewTraders();
 		// System.out.println(offers);
 	}
@@ -81,7 +83,7 @@ public class CatraPlugin extends JavaPlugin
 				@Override
 				public void run()
 				{
-					background(args);
+					newOffers(args);
 
 				}
 			};
@@ -114,37 +116,29 @@ public class CatraPlugin extends JavaPlugin
 		getConfig().addDefault("trader.entity", EntityType.VILLAGER.toString());
 		getConfig().addDefault("trader.registered", new String[0]);
 		{
-			ArrayList<Material> whitelist = new ArrayList<>();
-			ArrayList<Material> blacklist = new ArrayList<>();
-			whitelist.add(Material.GRASS);
-			whitelist.add(Material.WOOD);
-			whitelist.add(Material.SAND);
-			whitelist.add(Material.NETHERRACK);
-			ArrayList<String> whitelistString = new ArrayList<>();
-			for (Material m : whitelist)
-				whitelistString.add(m.toString());
-			ArrayList<String> blacklistString = new ArrayList<>();
-			for (Material m : blacklist)
-				blacklistString.add(m.toString());
-			getConfig().addDefault("trader.ground.whitelist", whitelistString);
-			getConfig().addDefault("trader.ground.blacklist", blacklistString);
+			ArrayList<Material> list = new ArrayList<>();
+			list.add(Material.GRASS);
+			list.add(Material.STONE);
+			list.add(Material.COBBLESTONE);
+			list.add(Material.WOOD);
+			list.add(Material.SAND);
+			list.add(Material.NETHERRACK);
+			ArrayList<String> listString = new ArrayList<>();
+			for (Material m : list)
+				listString.add(m.toString());
+			getConfig().addDefault("trader.ground.list", listString);
 			getConfig().addDefault("trader.ground.listmode", ListMode.WHITELIST.toString());
 		}
 		{
-			ArrayList<Material> whitelist = new ArrayList<>();
-			ArrayList<Material> blacklist = new ArrayList<>();
-			whitelist.add(Material.AIR);
-			whitelist.add(Material.TORCH);
-			whitelist.add(Material.SIGN);
-			whitelist.add(Material.LADDER);
-			ArrayList<String> whitelistString = new ArrayList<>();
-			for (Material m : whitelist)
-				whitelistString.add(m.toString());
-			ArrayList<String> blacklistString = new ArrayList<>();
-			for (Material m : blacklist)
-				blacklistString.add(m.toString());
-			getConfig().addDefault("trader.atmosphere.whitelist", whitelistString);
-			getConfig().addDefault("trader.atmosphere.blacklist", blacklistString);
+			ArrayList<Material> list = new ArrayList<>();
+			list.add(Material.AIR);
+			list.add(Material.TORCH);
+			list.add(Material.SIGN);
+			list.add(Material.LADDER);
+			ArrayList<String> listString = new ArrayList<>();
+			for (Material m : list)
+				listString.add(m.toString());
+			getConfig().addDefault("trader.atmosphere.list", listString);
 			getConfig().addDefault("trader.atmosphere.listmode", ListMode.WHITELIST.toString());
 		}
 		{
@@ -197,7 +191,7 @@ public class CatraPlugin extends JavaPlugin
 		}
 		getConfig().addDefault("advanced.inithashsize", "");
 		getConfig().addDefault("advanced.maxloadfactor", 0.75);
-		getConfig().addDefault("advaced.randomclustersize", 9);
+		getConfig().addDefault("advanced.randomclustersize", 100);
 		getConfig().options().copyDefaults(true);
 		saveConfig();
 	}
@@ -218,16 +212,7 @@ public class CatraPlugin extends JavaPlugin
 		HashMap<Position, Location> locs = coordinateManager.getWorldBounds(world);
 		Location min = locs.get(Position.MIN);
 		Location max = locs.get(Position.MAX);
-		return randomLocationBetween(min, max);
-	}
-
-	public Location randomLocationBetween(Location loc1, Location loc2)
-	{
-		ArrayList<Location> locs = getSaveLocatationsBetween(loc1, loc2);
-		if (locs.size() < 1)
-			return null;
-		Collections.shuffle(locs);
-		return locs.get(0);
+		return getSaveLocatationBetween(min, max);
 	}
 
 	public boolean isSafe(final Location loc) throws InterruptedException, ExecutionException
@@ -237,52 +222,62 @@ public class CatraPlugin extends JavaPlugin
 		return retFut.get();
 	}
 
-	public ArrayList<Location> getSaveLocatationsBetween(Location loc1, Location loc2)
+	public Location getSaveLocatationBetween(Location loc1, Location loc2)
 	{
-		ArrayList<Location> ret = new ArrayList<>();
-		System.out.println("Begin between");
-		int i = 0;
-		for (Location loc : getLocationsBetween(loc1, loc2))
+		for (ArrayList<Location> locArr : getLocationsBetween(loc1, loc2))
 		{
-			if (i % 1000 == 1)
-				System.out.println("Davor: " + System.currentTimeMillis());
-			try
+			for (Location loc : locArr)
 			{
-				if (isSafe(loc))
-					ret.add(loc);
-			} catch (InterruptedException | ExecutionException e)
-			{
-				e.printStackTrace();
+				try
+				{
+					if (isSafe(loc))
+						return loc;
+				} catch (InterruptedException | ExecutionException e)
+				{
+					e.printStackTrace();
+				}
 			}
-			if (i % 1000 == 0)
-				System.out.println("Dannach: " + System.currentTimeMillis());
-			i++;
 		}
-		System.out.println("end between");
-		return ret;
+		return null;
 	}
 
-	public ArrayList<Location> getLocationsBetween(Location loc1, Location loc2)
+	@SuppressWarnings("unchecked")
+	public ArrayList<ArrayList<Location>> getLocationsBetween(Location loc1, Location loc2)
 	{
-		ArrayList<Location> ret = new ArrayList<>();
+		ArrayList<ArrayList<Location>> ret = new ArrayList<>();
 		int x1 = loc1.getBlockX();
 		int x2 = loc2.getBlockX();
 		int y1 = loc1.getBlockY();
 		int y2 = loc2.getBlockY();
 		int z1 = loc1.getBlockZ();
 		int z2 = loc2.getBlockZ();
-		for (int x = x1; (x1 < x2 && x <= x2) || (x1 > x2 && x >= x2); x += (x1 < x2) ? 1 : -1)
+		ArrayList<Location> cluster = new ArrayList<>();
+		int clusterIterator = 0;
+		for (int x = x1; (x1 < x2 && x <= x2) || (x1 > x2 && x >= x2) || x == x2; x += (x1 < x2) ? 1 : -1)
 		{
-			for (int y = y1; (y1 < y2 && y <= y2) || (y1 > y2 && y >= y2); y += (y1 < y2) ? 1 : -1)
+			for (int z = z1; (z1 < z2 && z <= z2) || (z1 > z2 && z >= z2) || z == z2; z += (z1 < z2) ? 1 : -1)
 			{
-				for (int z = z1; (z1 < z2 && z <= z2) || (z1 > z2 && z >= z2); z += (z1 < z2) ? 1 : -1)
+				for (int y = y1; (y1 < y2 && y <= y2) || (y1 > y2 && y >= y2) || y == y2; y += (y1 < y2) ? 1 : -1)
 				{
 					Location loc = new Location(loc1.getWorld(), x, y, z);
-					ret.add(loc);
+					clusterIterator++;
+					if (clusterIterator % clusterSize == 0)
+					{
+						Collections.shuffle(cluster);
+						ret.add((ArrayList<Location>) cluster.clone());
+						cluster = new ArrayList<>();
+					}
+					cluster.add(loc);
 				}
 			}
 		}
+		if (cluster != null)
+		{
+			Collections.shuffle(cluster);
+			ret.add(cluster);
+		}
 		System.out.println("all locs");
+		Collections.shuffle(ret);
 		return ret;
 	}
 
@@ -354,24 +349,13 @@ public class CatraPlugin extends JavaPlugin
 		return new ArrayList<>(getConfig().getStringList("trader.names"));
 	}
 
-	public void background(final String[] args)
+	public void newOffers(final String[] args)
 	{
-		// long ticks = getConfig().getLong("trader.interval") / 1000 * 20;
-		/*
-		 * BukkitRunnable br = new BukkitRunnable() {
-		 * 
-		 * @Override public void run() {
-		 */
-		for (int i = 0; i < Integer.parseInt(args[0]); i++)
+		for (World world : getTraderWorlds())
 		{
-			for (World world : getTraderWorlds())
-			{
+			for (int i = 0; i < Integer.parseInt(args[0]); i++)
 				System.out.println(world.getName() + ": " + getNextLocation(world));
-			}
 		}
-		/*
-		 * } }; br.runTaskAsynchronously(this);
-		 */
 	}
 
 	public void print()
@@ -412,4 +396,19 @@ public class CatraPlugin extends JavaPlugin
 		br.runTaskLaterAsynchronously(this, 0);
 	}
 
+	public void spawnTrader(Location loc)
+	{
+		loc.getWorld().spawnEntity(loc, EntityType.VILLAGER);
+	}
+
+	public String nextName()
+	{
+		List<String> list = getConfig().getStringList("trader.names");
+
+		if (list.size() > 0)
+			Collections.shuffle(list);
+		else
+			return ChatColor.DARK_RED + "Richard Stöckl";
+		return list.get(0);
+	}
 }
