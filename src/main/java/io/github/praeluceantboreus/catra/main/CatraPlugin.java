@@ -7,8 +7,10 @@ import io.github.praeluceantboreus.catra.serialize.Coords.Position;
 import io.github.praeluceantboreus.catra.serialize.ListMode;
 import io.github.praeluceantboreus.catra.trading.Offer;
 import io.github.praeluceantboreus.catra.trading.TradeItemStack;
+import io.github.praeluceantboreus.catra.utils.GaussUtils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.GregorianCalendar;
@@ -16,19 +18,21 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Ageable;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -39,7 +43,7 @@ public class CatraPlugin extends JavaPlugin
 {
 
 	private Coords coordinateManager;
-	private HashMap<Entity, Offer> offers;
+	private HashMap<String, Offer> offers;
 	private HashSet<String> atmospherelist;
 	private HashSet<String> groundlist;
 	private ListMode atmosphereMode;
@@ -52,6 +56,7 @@ public class CatraPlugin extends JavaPlugin
 	{
 		super.onEnable();
 		genConfig();
+		reloadConfig();
 		getServer().getPluginManager().registerEvents(new ClickListener(this), this);
 		coordinateManager = Coords.deserialize(getConfig().getConfigurationSection("worlds"), getServer());
 		offers = new HashMap<>();
@@ -63,6 +68,15 @@ public class CatraPlugin extends JavaPlugin
 		clusterSize = getConfig().getInt("advanced.randomclustersize", 100);
 		// generateNewTraders();
 		// System.out.println(offers);
+		offerLoop();
+	}
+
+	@Override
+	public void onDisable()
+	{
+		removeTraders();
+		getServer().getScheduler().cancelTasks(this);
+		super.onDisable();
 	}
 
 	@Override
@@ -70,36 +84,6 @@ public class CatraPlugin extends JavaPlugin
 	{
 		switch (label)
 		{
-		case "spawnv":
-		{
-			if (!(sender instanceof Player))
-				return false;
-			Player p = (Player) sender;
-			System.out.println(p);
-			return true;
-		}
-		case "newloc":
-		{
-			if (args.length < 1)
-				return false;
-			BukkitRunnable br = new BukkitRunnable()
-			{
-
-				@Override
-				public void run()
-				{
-					newOffers(args);
-
-				}
-			};
-			br.runTaskAsynchronously(this);
-			return true;
-		}
-		case "async":
-		{
-			System.out.println(offers);
-			return true;
-		}
 		case "regen":
 		{
 			BukkitRunnable br = new BukkitRunnable()
@@ -134,6 +118,9 @@ public class CatraPlugin extends JavaPlugin
 		gc.set(GregorianCalendar.HOUR_OF_DAY, 2);
 		getConfig().addDefault("trader.interval", gc.getTimeInMillis());
 		getConfig().addDefault("trader.entity", EntityType.VILLAGER.toString());
+		getConfig().addDefault("trader.sound.type", Sound.CLICK.toString());
+		getConfig().addDefault("trader.sound.volume", 1.0f);
+		getConfig().addDefault("trader.sound.pitch", 1.5f);
 		getConfig().addDefault("trader.registered", new String[0]);
 		{
 			ArrayList<Material> list = new ArrayList<>();
@@ -164,22 +151,28 @@ public class CatraPlugin extends JavaPlugin
 		{
 			ArrayList<Map<String, Object>> buys = new ArrayList<>();
 			buys.add(new TradeItemStack(new ItemStack(Material.STONE, 32), 64).serialize());
-			buys.add(new TradeItemStack(new ItemStack(Material.LOG, 16), 48).serialize());
-			buys.add(new TradeItemStack(new ItemStack(Material.COAL, 16), 32).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.LOG, 32), 48).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.LOG, 32, (short) 1), 48).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.LOG, 32, (short) 2), 48).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.LOG, 32, (short) 3), 48).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.LOG, 32, (short) 4), 48).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.LOG, 32, (short) 5), 48).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.COAL, 16, (short) 1), 32).serialize());
 			buys.add(new TradeItemStack(new ItemStack(Material.CARROT_ITEM, 48), 64).serialize());
 			buys.add(new TradeItemStack(new ItemStack(Material.POTATO_ITEM, 48), 64).serialize());
 			getConfig().addDefault("trader.buys", buys);
 		}
 		{
 			ArrayList<Map<String, Object>> sells = new ArrayList<>();
-			sells.add(new TradeItemStack(new ItemStack(Material.SAND, 32), 64).serialize());
-			sells.add(new TradeItemStack(new ItemStack(Material.GRAVEL, 32), 64).serialize());
-			sells.add(new TradeItemStack(new ItemStack(Material.IRON_INGOT, 6), 9).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.SAND, 16), 32).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.GRAVEL, 16), 32).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.IRON_INGOT, 1), 5).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.NETHER_WARTS, 6), 9).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.CARROT_ITEM, 6), 9).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.POTATO_ITEM, 6), 9).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.SUGAR_CANE, 6), 9).serialize());
-			sells.add(new TradeItemStack(new ItemStack(Material.BLAZE_ROD, 2), 5).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.BLAZE_ROD, 2), 3).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.CLAY, 2), 5).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.LAVA_BUCKET, 1), 3).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.WATER_BUCKET, 1), 9).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.SAPLING, 8, (short) 0), 16).serialize());
@@ -190,27 +183,30 @@ public class CatraPlugin extends JavaPlugin
 			sells.add(new TradeItemStack(new ItemStack(Material.SAPLING, 8, (short) 5), 16).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.SLIME_BALL, 3), 9).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.GLOWSTONE_DUST, 16), 32).serialize());
-			sells.add(new TradeItemStack(new ItemStack(Material.REDSTONE, 16), 32).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.REDSTONE, 8), 16).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.MELON_BLOCK, 2), 5).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.PUMPKIN, 2), 5).serialize());
-			sells.add(new TradeItemStack(new ItemStack(Material.GRASS, 48), 64).serialize());
-			sells.add(new TradeItemStack(new ItemStack(Material.GRASS, 48), 64).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.GRASS, 16), 48).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.WATER_LILY, 8), 16).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.RED_MUSHROOM, 8), 16).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.BROWN_MUSHROOM, 8), 16).serialize());
 			sells.add(new TradeItemStack(new ItemStack(Material.CACTUS, 8), 12).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.ENCHANTMENT_TABLE, 1), 1).serialize());
+			sells.add(new TradeItemStack(new ItemStack(Material.DIAMOND, 1), 1).serialize());
 			getConfig().addDefault("trader.sells", sells);
 		}
 		{
 			ArrayList<String> names = new ArrayList<>();
-			names.add(ChatColor.DARK_BLUE + "Gernot");
-			names.add(ChatColor.DARK_RED + "Heinrich");
-			names.add(ChatColor.GOLD + "Thomas");
-			names.add(ChatColor.DARK_GREEN + "Joseph");
+			ChatColor[] colorArr = { ChatColor.AQUA, ChatColor.BLACK, ChatColor.BLUE, ChatColor.DARK_AQUA, ChatColor.DARK_BLUE, ChatColor.DARK_GRAY, ChatColor.DARK_GREEN, ChatColor.DARK_PURPLE, ChatColor.DARK_RED, ChatColor.GOLD, ChatColor.GRAY, ChatColor.GREEN, ChatColor.LIGHT_PURPLE, ChatColor.RED, ChatColor.YELLOW };
+			String[] namesArr = { "Heinrich", "Gernot", "Gerhard", "Wolfgang", "Dieter", "Johann", "Wilfried", "Siegfried", "Rudolph", "Joseph" };
+			ArrayList<ChatColor> colors = new ArrayList<>(Arrays.asList(colorArr));
+			for (String n : namesArr)
+			{
+				Collections.shuffle(colors);
+				names.add(colors.get(0) + n);
+			}
 			getConfig().addDefault("trader.names", names);
 		}
-		getConfig().addDefault("advanced.inithashsize", "");
-		getConfig().addDefault("advanced.maxloadfactor", 0.75);
 		getConfig().addDefault("advanced.randomclustersize", 100);
 		getConfig().options().copyDefaults(true);
 		saveConfig();
@@ -220,7 +216,7 @@ public class CatraPlugin extends JavaPlugin
 	{
 		if (entity == null)
 			return false;
-		return offers.containsKey(entity);
+		return offers.containsKey(entity.getUniqueId().toString());
 	}
 
 	public Location getNextLocation(World world)
@@ -298,43 +294,45 @@ public class CatraPlugin extends JavaPlugin
 
 	public ArrayList<Entity> getActiveTraders()
 	{
-		ArrayList<String> uuids = new ArrayList<>(getConfig().getStringList("target.registered"));
+		Set<String> uuids = offers.keySet();
 		ArrayList<Entity> entities = new ArrayList<>();
 		for (World world : getServer().getWorlds())
 			for (Entity ent : world.getEntities())
+			{
 				if (uuids.contains(ent.getUniqueId().toString()))
 					entities.add(ent);
+			}
 		return entities;
 	}
 
-	public void setActiveTraders(ArrayList<Entity> traders)
-	{
-		ArrayList<String> uuids = new ArrayList<>();
-		for (Entity entity : traders)
-			uuids.add(entity.getUniqueId().toString());
-		getConfig().set("trader.registered", uuids);
-		saveConfig();
-	}
+	/*
+	 * public void setActiveTraders(ArrayList<Entity> traders) {
+	 * ArrayList<String> uuids = new ArrayList<>(); for (Entity entity :
+	 * traders) uuids.add(entity.getUniqueId().toString());
+	 * getConfig().set("trader.registered", uuids); saveConfig(); }
+	 */
 
 	public void removeTraders()
 	{
 		for (Entity entity : getActiveTraders())
+		{
 			entity.remove();
-		setActiveTraders(new ArrayList<Entity>());
+		}
+		offers = new HashMap<String, Offer>();
 	}
 
 	public void generateNewTraders()
 	{
 		final ArrayList<Entity> trader = new ArrayList<>();
 		int amount = getConfig().getInt("trader.amount");
+		removeTraders();
 		offers.clear();
 		for (final World world : getTraderWorlds())
 		{
 			for (int i = 0; i < amount; i++)
 			{
-				final Location loc = getNextLocation(world);
+				final Location loc = GaussUtils.makeLocationSpawnReady(getNextLocation(world));
 				final Offer offer = generateOffer();
-				getServer().getPlayer("PreluceantBoreus").teleport(loc);
 				BukkitRunnable br = new BukkitRunnable()
 				{
 
@@ -346,17 +344,24 @@ public class CatraPlugin extends JavaPlugin
 						if (entitiy instanceof LivingEntity)
 						{
 							LivingEntity lent = (LivingEntity) entitiy;
-							PotionEffect dontMove = new PotionEffect(PotionEffectType.SLOW, Integer.MAX_VALUE, 10, false, true);
+							PotionEffect dontMove = new PotionEffect(PotionEffectType.SLOW, Integer.MAX_VALUE, 10, false, false);
 							lent.addPotionEffect(dontMove);
 						}
-						offers.put(entitiy, offer);
+						if (entitiy instanceof Ageable)
+						{
+							Ageable ageable = (Ageable) entitiy;
+							ageable.setBreed(false);
+							ageable.setAgeLock(true);
+						}
+						getLogger().info("Spawned new trader in: " + loc.getWorld().getName() + " on: " + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ());
+						offers.put(entitiy.getUniqueId().toString(), offer);
 						trader.add(entitiy);
 					}
 				};
 				br.runTask(this);
 			}
 		}
-		setActiveTraders(trader);
+		// setActiveTraders(trader);
 	}
 
 	public EntityType getEntityType()
@@ -401,44 +406,6 @@ public class CatraPlugin extends JavaPlugin
 		}
 	}
 
-	public void print()
-	{
-		// final Location loc = new Location(getTraderWorlds().get(0), 5, 1,
-		// 15);
-		BukkitRunnable br = new BukkitRunnable()
-		{
-
-			@Override
-			public void run()
-			{
-				BukkitRunnable sync = new BukkitRunnable()
-				{
-
-					@Override
-					public void run()
-					{
-						// generateNewTraders();
-						System.out.println("beg");
-					}
-				};
-				sync.runTask(CatraPlugin.this);
-				while (true)
-				{
-					System.out.println("baum");
-					try
-					{
-						Thread.sleep(50000);
-					} catch (InterruptedException e)
-					{
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-				}
-			}
-		};
-		br.runTaskLaterAsynchronously(this, 0);
-	}
-
 	public String nextName()
 	{
 		List<String> list = getConfig().getStringList("trader.names");
@@ -446,12 +413,27 @@ public class CatraPlugin extends JavaPlugin
 		if (list.size() > 0)
 			Collections.shuffle(list);
 		else
-			return ChatColor.DARK_RED + "Richard Stöckl";
+			return ChatColor.DARK_RED + "Tschagagwag";
 		return list.get(0);
 	}
 
 	public Offer getOffer(Entity ent)
 	{
-		return offers.get(ent);
+		return offers.get(ent.getUniqueId().toString());
+	}
+
+	public void offerLoop()
+	{
+		BukkitRunnable br = new BukkitRunnable()
+		{
+
+			@Override
+			public void run()
+			{
+				generateNewTraders();
+
+			}
+		};
+		br.runTaskTimerAsynchronously(this, 0, getConfig().getLong("trader.interval") / 1000 * 20);
 	}
 }
