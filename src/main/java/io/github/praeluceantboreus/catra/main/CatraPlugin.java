@@ -1,5 +1,6 @@
 package io.github.praeluceantboreus.catra.main;
 
+import io.github.praeluceantboreus.catra.multicore.ClickListener;
 import io.github.praeluceantboreus.catra.multicore.LocationChecker;
 import io.github.praeluceantboreus.catra.serialize.Coords;
 import io.github.praeluceantboreus.catra.serialize.Coords.Position;
@@ -26,9 +27,12 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 
 public class CatraPlugin extends JavaPlugin
@@ -48,6 +52,7 @@ public class CatraPlugin extends JavaPlugin
 	{
 		super.onEnable();
 		genConfig();
+		getServer().getPluginManager().registerEvents(new ClickListener(this), this);
 		coordinateManager = Coords.deserialize(getConfig().getConfigurationSection("worlds"), getServer());
 		offers = new HashMap<>();
 		atmospherelist = new HashSet<String>(getConfig().getStringList("trader.atmosphere.list"));
@@ -92,7 +97,22 @@ public class CatraPlugin extends JavaPlugin
 		}
 		case "async":
 		{
-			print();
+			System.out.println(offers);
+			return true;
+		}
+		case "regen":
+		{
+			BukkitRunnable br = new BukkitRunnable()
+			{
+
+				@Override
+				public void run()
+				{
+					generateNewTraders();
+
+				}
+			};
+			br.runTaskAsynchronously(this);
 			return true;
 		}
 		default:
@@ -144,7 +164,7 @@ public class CatraPlugin extends JavaPlugin
 		{
 			ArrayList<Map<String, Object>> buys = new ArrayList<>();
 			buys.add(new TradeItemStack(new ItemStack(Material.STONE, 32), 64).serialize());
-			buys.add(new TradeItemStack(new ItemStack(Material.WOOD, 16), 48).serialize());
+			buys.add(new TradeItemStack(new ItemStack(Material.LOG, 16), 48).serialize());
 			buys.add(new TradeItemStack(new ItemStack(Material.COAL, 16), 32).serialize());
 			buys.add(new TradeItemStack(new ItemStack(Material.CARROT_ITEM, 48), 64).serialize());
 			buys.add(new TradeItemStack(new ItemStack(Material.POTATO_ITEM, 48), 64).serialize());
@@ -200,11 +220,7 @@ public class CatraPlugin extends JavaPlugin
 	{
 		if (entity == null)
 			return false;
-		List<String> ents = getConfig().getStringList("trader.registered");
-		for (String uuid : ents)
-			if (entity.getUniqueId().toString().equalsIgnoreCase(uuid))
-				return true;
-		return false;
+		return offers.containsKey(entity);
 	}
 
 	public Location getNextLocation(World world)
@@ -276,7 +292,6 @@ public class CatraPlugin extends JavaPlugin
 			Collections.shuffle(cluster);
 			ret.add(cluster);
 		}
-		System.out.println("all locs");
 		Collections.shuffle(ret);
 		return ret;
 	}
@@ -297,7 +312,8 @@ public class CatraPlugin extends JavaPlugin
 		ArrayList<String> uuids = new ArrayList<>();
 		for (Entity entity : traders)
 			uuids.add(entity.getUniqueId().toString());
-		getConfig().set("trader.registered", uuids.toArray(new String[uuids.size()]));
+		getConfig().set("trader.registered", uuids);
+		saveConfig();
 	}
 
 	public void removeTraders()
@@ -309,16 +325,43 @@ public class CatraPlugin extends JavaPlugin
 
 	public void generateNewTraders()
 	{
+		final ArrayList<Entity> trader = new ArrayList<>();
 		int amount = getConfig().getInt("trader.amount");
 		offers.clear();
-		for (World world : getTraderWorlds())
+		for (final World world : getTraderWorlds())
 		{
 			for (int i = 0; i < amount; i++)
 			{
-				Entity entitiy = world.spawnEntity(getNextLocation(world), EntityType.VILLAGER);
-				offers.put(entitiy, generateOffer());
+				final Location loc = getNextLocation(world);
+				final Offer offer = generateOffer();
+				getServer().getPlayer("PreluceantBoreus").teleport(loc);
+				BukkitRunnable br = new BukkitRunnable()
+				{
+
+					@Override
+					public void run()
+					{
+						Entity entitiy = world.spawnEntity(loc, getEntityType());
+						entitiy.setCustomName(nextName());
+						if (entitiy instanceof LivingEntity)
+						{
+							LivingEntity lent = (LivingEntity) entitiy;
+							PotionEffect dontMove = new PotionEffect(PotionEffectType.SLOW, Integer.MAX_VALUE, 10, false, true);
+							lent.addPotionEffect(dontMove);
+						}
+						offers.put(entitiy, offer);
+						trader.add(entitiy);
+					}
+				};
+				br.runTask(this);
 			}
 		}
+		setActiveTraders(trader);
+	}
+
+	public EntityType getEntityType()
+	{
+		return EntityType.valueOf(getConfig().getString("trader.entity"));
 	}
 
 	public Offer generateOffer()
@@ -396,11 +439,6 @@ public class CatraPlugin extends JavaPlugin
 		br.runTaskLaterAsynchronously(this, 0);
 	}
 
-	public void spawnTrader(Location loc)
-	{
-		loc.getWorld().spawnEntity(loc, EntityType.VILLAGER);
-	}
-
 	public String nextName()
 	{
 		List<String> list = getConfig().getStringList("trader.names");
@@ -410,5 +448,10 @@ public class CatraPlugin extends JavaPlugin
 		else
 			return ChatColor.DARK_RED + "Richard Stöckl";
 		return list.get(0);
+	}
+
+	public Offer getOffer(Entity ent)
+	{
+		return offers.get(ent);
 	}
 }
