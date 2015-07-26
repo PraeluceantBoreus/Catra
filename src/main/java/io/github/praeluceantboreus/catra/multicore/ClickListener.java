@@ -5,8 +5,10 @@ import io.github.praeluceantboreus.catra.main.CatraPlugin;
 import java.util.HashMap;
 import java.util.HashSet;
 
+import org.bukkit.Sound;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.HumanEntity;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -22,11 +24,17 @@ public class ClickListener implements Listener
 	private CatraPlugin plugin;
 	private HashSet<String> trading;
 	private static final int sellsslot = 2, buysslot = 6;
+	private float volume, pitch;
+	private Sound sound;
 
 	public ClickListener(CatraPlugin plugin)
 	{
 		this.plugin = plugin;
 		trading = new HashSet<>();
+		volume = (float) plugin.getConfig().getDouble("trader.sound.volume");
+		pitch = (float) plugin.getConfig().getDouble("trader.sound.pitch");
+		sound = Sound.BURP;
+		sound = Sound.valueOf(plugin.getConfig().getString("trader.sound.type"));
 	}
 
 	@EventHandler
@@ -73,6 +81,11 @@ public class ClickListener implements Listener
 					ItemStack sells = tradingInv.getItem(sellsslot);
 					if (playerInv.containsAtLeast(buys, buys.getAmount()))
 					{
+						if (player instanceof Player)
+						{
+							Player realPlayer = (Player) player;
+							realPlayer.playSound(realPlayer.getLocation(), sound, volume, pitch);
+						}
 						playerInv.removeItem(buys);
 						HashMap<Integer, ItemStack> rest = playerInv.addItem(sells);
 						for (ItemStack is : rest.values())
