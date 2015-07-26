@@ -6,3 +6,12 @@ commands:
   spawnv:
     description: spawns a villager on a random location
     usage: /spawnv
+  newloc:
+    description: get Location
+    usage: /newloc <amount>
+  async:
+    description: async
+    usage: /async
+  regen:
+    description: async
+    usage: /async
