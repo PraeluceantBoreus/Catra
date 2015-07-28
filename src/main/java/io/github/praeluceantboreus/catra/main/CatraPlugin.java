@@ -208,6 +208,8 @@ public class CatraPlugin extends JavaPlugin
 			getConfig().addDefault("trader.names", names);
 		}
 		getConfig().addDefault("advanced.randomclustersize", 100);
+		getConfig().addDefault("advanced.locations.use", false);
+		getConfig().addDefault("advanced.locations.radius", 12);
 		getConfig().options().copyDefaults(true);
 		saveConfig();
 	}
