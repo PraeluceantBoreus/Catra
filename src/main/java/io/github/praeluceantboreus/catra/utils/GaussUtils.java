@@ -21,6 +21,8 @@ public class GaussUtils
 
 	public static Location makeLocationSpawnReady(Location loc)
 	{
+		if(loc==null)
+			return null;
 		loc.setX(fixCoordinate(loc.getX()));
 		loc.setZ(fixCoordinate(loc.getZ()));
 		return loc;

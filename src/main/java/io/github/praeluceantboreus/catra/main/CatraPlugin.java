@@ -11,6 +11,7 @@ import io.github.praeluceantboreus.catra.utils.GaussUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.GregorianCalendar;
@@ -33,6 +34,7 @@ import org.bukkit.entity.Ageable;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -49,7 +51,7 @@ public class CatraPlugin extends JavaPlugin
 	private ListMode atmosphereMode;
 	private ListMode groundMode;
 	private LocationChecker lifeSafer;
-	private int clusterSize;
+	private int clusterSize, radius;
 
 	@Override
 	public void onEnable()
@@ -66,6 +68,7 @@ public class CatraPlugin extends JavaPlugin
 		groundMode = ListMode.valueOf(getConfig().getString("trader.ground.listmode"));
 		lifeSafer = new LocationChecker(atmospherelist, groundlist, atmosphereMode.equals(ListMode.WHITELIST), groundMode.equals(ListMode.WHITELIST));
 		clusterSize = getConfig().getInt("advanced.randomclustersize", 100);
+		radius = getConfig().getInt("advanced.locations.radius", 12);
 		// generateNewTraders();
 		// System.out.println(offers);
 		offerLoop();
@@ -226,7 +229,8 @@ public class CatraPlugin extends JavaPlugin
 		HashMap<Position, Location> locs = coordinateManager.getWorldBounds(world);
 		Location min = locs.get(Position.MIN);
 		Location max = locs.get(Position.MAX);
-		return getSaveLocatationBetween(min, max);
+		boolean usePlayerLocs = getConfig().getBoolean("advanced.locations.use", false);
+		return getSaveLocatationBetween(min, max, usePlayerLocs);
 	}
 
 	public boolean isSafe(final Location loc) throws InterruptedException, ExecutionException
@@ -236,9 +240,17 @@ public class CatraPlugin extends JavaPlugin
 		return retFut.get();
 	}
 
-	public Location getSaveLocatationBetween(Location loc1, Location loc2)
+	public Location getSaveLocatationBetween(Location loc1, Location loc2, boolean usePlayerlocs)
 	{
-		for (ArrayList<Location> locArr : getLocationsBetween(loc1, loc2))
+		ArrayList<ArrayList<Location>> locs;
+		if (usePlayerlocs)
+		{
+			locs = getLocationsArroundPlayers(getServer().getOnlinePlayers(), radius);
+		} else
+		{
+			locs = getLocationsBetween(loc1, loc2);
+		}
+		for (ArrayList<Location> locArr : locs)
 		{
 			for (Location loc : locArr)
 			{
@@ -334,6 +346,8 @@ public class CatraPlugin extends JavaPlugin
 			for (int i = 0; i < amount; i++)
 			{
 				final Location loc = GaussUtils.makeLocationSpawnReady(getNextLocation(world));
+				if (loc == null)
+					return;
 				final Offer offer = generateOffer();
 				BukkitRunnable br = new BukkitRunnable()
 				{
@@ -437,5 +451,15 @@ public class CatraPlugin extends JavaPlugin
 			}
 		};
 		br.runTaskTimerAsynchronously(this, 0, getConfig().getLong("trader.interval") / 1000 * 20);
+	}
+
+	public ArrayList<ArrayList<Location>> getLocationsArroundPlayers(Collection<? extends Player> players, int radius)
+	{
+		ArrayList<ArrayList<Location>> ret = new ArrayList<>();
+		for (Player player : players)
+		{
+			ret.addAll(getLocationsBetween(player.getLocation().clone().add(radius, radius, radius), player.getLocation().clone().add(-radius, -radius, -radius)));
+		}
+		return ret;
 	}
 }
