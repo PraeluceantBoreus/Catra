@@ -11,10 +11,7 @@ import io.github.praeluceantboreus.catra.utils.GaussUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
-import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -52,6 +49,10 @@ public class CatraPlugin extends JavaPlugin
 	private ListMode groundMode;
 	private LocationChecker lifeSafer;
 	private int clusterSize, radius;
+	private long lastGen = 0;
+	private BukkitRunnable offerThread;
+	private boolean offerLock = false;
+	private ArrayList<Location> playerLocs;
 
 	@Override
 	public void onEnable()
@@ -69,8 +70,35 @@ public class CatraPlugin extends JavaPlugin
 		lifeSafer = new LocationChecker(atmospherelist, groundlist, atmosphereMode.equals(ListMode.WHITELIST), groundMode.equals(ListMode.WHITELIST));
 		clusterSize = getConfig().getInt("advanced.randomclustersize", 100);
 		radius = getConfig().getInt("advanced.locations.radius", 12);
-		// generateNewTraders();
-		// System.out.println(offers);
+		playerLocs = new ArrayList<>();
+		offerThread = new BukkitRunnable()
+		{
+
+			@Override
+			public void run()
+			{
+				if (System.currentTimeMillis() - lastGen >= getConfig().getLong("trader.interval") && !offerLock && getServer().getOnlinePlayers().size()>0)
+				{
+					offerLock = true;
+					playerLocs.clear();
+					for(Player player : getServer().getOnlinePlayers())
+						playerLocs.add(player.getLocation());
+					for (int i = 0; i < getConfig().getInt("trader.amount"); i++)
+					{
+						BukkitRunnable br = new BukkitRunnable()
+						{
+
+							@Override
+							public void run()
+							{
+								generateNewTraders();
+							}
+						};
+						br.runTaskAsynchronously(CatraPlugin.this);
+					}
+				}
+			}
+		};
 		offerLoop();
 	}
 
@@ -89,17 +117,7 @@ public class CatraPlugin extends JavaPlugin
 		{
 		case "regen":
 		{
-			BukkitRunnable br = new BukkitRunnable()
-			{
-
-				@Override
-				public void run()
-				{
-					generateNewTraders();
-
-				}
-			};
-			br.runTaskAsynchronously(this);
+			lastGen = 0;
 			return true;
 		}
 		default:
@@ -115,11 +133,8 @@ public class CatraPlugin extends JavaPlugin
 			coords.addWorld(new Location(w, 0, 0, 0), new Location(w, 100, 255, 300));
 		}
 		getConfig().addDefault("worlds", coords.serialize());
-		getConfig().addDefault("trader.amount", 2);
-		GregorianCalendar gc = new GregorianCalendar();
-		gc.setTime(new Date(0));
-		gc.set(GregorianCalendar.HOUR_OF_DAY, 2);
-		getConfig().addDefault("trader.interval", gc.getTimeInMillis());
+		getConfig().addDefault("trader.amount", 4);
+		getConfig().addDefault("trader.interval", 10 * 60 * 1000);
 		getConfig().addDefault("trader.entity", EntityType.VILLAGER.toString());
 		getConfig().addDefault("trader.sound.type", Sound.CLICK.toString());
 		getConfig().addDefault("trader.sound.volume", 1.0f);
@@ -245,7 +260,7 @@ public class CatraPlugin extends JavaPlugin
 		ArrayList<ArrayList<Location>> locs;
 		if (usePlayerlocs)
 		{
-			locs = getLocationsArroundPlayers(getServer().getOnlinePlayers(), radius);
+			locs = getLocationsArroundLocations(playerLocs, radius);
 		} else
 		{
 			locs = getLocationsBetween(loc1, loc2);
@@ -319,13 +334,6 @@ public class CatraPlugin extends JavaPlugin
 		return entities;
 	}
 
-	/*
-	 * public void setActiveTraders(ArrayList<Entity> traders) {
-	 * ArrayList<String> uuids = new ArrayList<>(); for (Entity entity :
-	 * traders) uuids.add(entity.getUniqueId().toString());
-	 * getConfig().set("trader.registered", uuids); saveConfig(); }
-	 */
-
 	public void removeTraders()
 	{
 		for (Entity entity : getActiveTraders())
@@ -338,46 +346,51 @@ public class CatraPlugin extends JavaPlugin
 	public void generateNewTraders()
 	{
 		final ArrayList<Entity> trader = new ArrayList<>();
-		int amount = getConfig().getInt("trader.amount");
-		removeTraders();
-		offers.clear();
+		if (offers.keySet().size() >= getConfig().getInt("trader.amount"))
+		{
+			removeTraders();
+			offers.clear();
+			for (Player player : getServer().getOnlinePlayers())
+				player.closeInventory();
+		}
 		for (final World world : getTraderWorlds())
 		{
-			for (int i = 0; i < amount; i++)
+			final Location loc = GaussUtils.makeLocationSpawnReady(getNextLocation(world));
+			if (loc == null)
+				return;
+			final Offer offer = generateOffer();
+			BukkitRunnable br = new BukkitRunnable()
 			{
-				final Location loc = GaussUtils.makeLocationSpawnReady(getNextLocation(world));
-				if (loc == null)
-					return;
-				final Offer offer = generateOffer();
-				BukkitRunnable br = new BukkitRunnable()
-				{
 
-					@Override
-					public void run()
+				@Override
+				public void run()
+				{
+					Entity entitiy = world.spawnEntity(loc, getEntityType());
+					entitiy.setCustomName(nextName());
+					if (entitiy instanceof LivingEntity)
 					{
-						Entity entitiy = world.spawnEntity(loc, getEntityType());
-						entitiy.setCustomName(nextName());
-						if (entitiy instanceof LivingEntity)
-						{
-							LivingEntity lent = (LivingEntity) entitiy;
-							PotionEffect dontMove = new PotionEffect(PotionEffectType.SLOW, Integer.MAX_VALUE, 10, false, false);
-							lent.addPotionEffect(dontMove);
-						}
-						if (entitiy instanceof Ageable)
-						{
-							Ageable ageable = (Ageable) entitiy;
-							ageable.setBreed(false);
-							ageable.setAgeLock(true);
-						}
-						getLogger().info("Spawned new trader in: " + loc.getWorld().getName() + " on: " + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ());
-						offers.put(entitiy.getUniqueId().toString(), offer);
-						trader.add(entitiy);
+						LivingEntity lent = (LivingEntity) entitiy;
+						PotionEffect dontMove = new PotionEffect(PotionEffectType.SLOW, Integer.MAX_VALUE, 10, false, false);
+						lent.addPotionEffect(dontMove);
 					}
-				};
-				br.runTask(this);
-			}
+					if (entitiy instanceof Ageable)
+					{
+						Ageable ageable = (Ageable) entitiy;
+						ageable.setBreed(false);
+						ageable.setAgeLock(true);
+					}
+					getLogger().info("Spawned new trader in: " + loc.getWorld().getName() + " on: " + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ());
+					offers.put(entitiy.getUniqueId().toString(), offer);
+					trader.add(entitiy);
+					if (offers.keySet().size() >= getConfig().getInt("trader.amount"))
+					{
+						lastGen = System.currentTimeMillis();
+						offerLock = false;
+					}
+				}
+			};
+			br.runTask(this);
 		}
-		// setActiveTraders(trader);
 	}
 
 	public EntityType getEntityType()
@@ -413,15 +426,6 @@ public class CatraPlugin extends JavaPlugin
 		return new ArrayList<>(getConfig().getStringList("trader.names"));
 	}
 
-	public void newOffers(final String[] args)
-	{
-		for (World world : getTraderWorlds())
-		{
-			for (int i = 0; i < Integer.parseInt(args[0]); i++)
-				System.out.println(world.getName() + ": " + getNextLocation(world));
-		}
-	}
-
 	public String nextName()
 	{
 		List<String> list = getConfig().getStringList("trader.names");
@@ -440,25 +444,15 @@ public class CatraPlugin extends JavaPlugin
 
 	public void offerLoop()
 	{
-		BukkitRunnable br = new BukkitRunnable()
-		{
-
-			@Override
-			public void run()
-			{
-				generateNewTraders();
-
-			}
-		};
-		br.runTaskTimerAsynchronously(this, 0, getConfig().getLong("trader.interval") / 1000 * 20);
+		offerThread.runTaskTimerAsynchronously(this, 0, 60);
 	}
 
-	public ArrayList<ArrayList<Location>> getLocationsArroundPlayers(Collection<? extends Player> players, int radius)
+	public ArrayList<ArrayList<Location>> getLocationsArroundLocations(ArrayList<Location> locations, int radius)
 	{
 		ArrayList<ArrayList<Location>> ret = new ArrayList<>();
-		for (Player player : players)
+		for (Location loc : locations)
 		{
-			ret.addAll(getLocationsBetween(player.getLocation().clone().add(radius, radius, radius), player.getLocation().clone().add(-radius, -radius, -radius)));
+			ret.addAll(getLocationsBetween(loc.clone().add(radius, radius, radius), loc.clone().add(-radius, -radius, -radius)));
 		}
 		return ret;
 	}
