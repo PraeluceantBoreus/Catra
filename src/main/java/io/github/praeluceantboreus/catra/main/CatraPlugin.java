@@ -47,7 +47,6 @@ public class CatraPlugin extends JavaPlugin
 	private HashSet<String> groundlist;
 	private ListMode atmosphereMode;
 	private ListMode groundMode;
-	private LocationChecker lifeSafer;
 	private int clusterSize, radius;
 	private long lastGen = 0;
 	private BukkitRunnable offerThread;
@@ -67,7 +66,6 @@ public class CatraPlugin extends JavaPlugin
 		groundlist = new HashSet<String>(getConfig().getStringList("trader.ground.list"));
 		atmosphereMode = ListMode.valueOf(getConfig().getString("trader.atmosphere.listmode"));
 		groundMode = ListMode.valueOf(getConfig().getString("trader.ground.listmode"));
-		lifeSafer = new LocationChecker(atmospherelist, groundlist, atmosphereMode.equals(ListMode.WHITELIST), groundMode.equals(ListMode.WHITELIST));
 		clusterSize = getConfig().getInt("advanced.randomclustersize", 100);
 		radius = getConfig().getInt("advanced.locations.radius", 12);
 		playerLocs = new ArrayList<>();
@@ -77,11 +75,11 @@ public class CatraPlugin extends JavaPlugin
 			@Override
 			public void run()
 			{
-				if (System.currentTimeMillis() - lastGen >= getConfig().getLong("trader.interval") && !offerLock && getServer().getOnlinePlayers().size()>0)
+				if (System.currentTimeMillis() - lastGen >= getConfig().getLong("trader.interval") && !offerLock && getServer().getOnlinePlayers().size() > 0)
 				{
 					offerLock = true;
 					playerLocs.clear();
-					for(Player player : getServer().getOnlinePlayers())
+					for (Player player : getServer().getOnlinePlayers())
 						playerLocs.add(player.getLocation());
 					for (int i = 0; i < getConfig().getInt("trader.amount"); i++)
 					{
@@ -119,6 +117,13 @@ public class CatraPlugin extends JavaPlugin
 		{
 			lastGen = 0;
 			return true;
+		}
+		case "sp":
+		{
+			if (args.length < 3 || !(sender instanceof Player))
+				return false;
+			Location loc = new Location(((Player) sender).getLocation().getWorld(), Integer.parseInt(args[0]), Integer.parseInt(args[1]), Integer.parseInt(args[2]));
+			((Player) sender).getWorld().spawnEntity(loc, EntityType.COW);
 		}
 		default:
 			return false;
@@ -250,7 +255,7 @@ public class CatraPlugin extends JavaPlugin
 
 	public boolean isSafe(final Location loc) throws InterruptedException, ExecutionException
 	{
-		lifeSafer.setLoc(loc);
+		LocationChecker lifeSafer = new LocationChecker(atmospherelist, groundlist, this.atmosphereMode.equals(ListMode.WHITELIST), this.groundMode.equals(ListMode.WHITELIST), loc);
 		Future<Boolean> retFut = getServer().getScheduler().callSyncMethod(this, lifeSafer);
 		return retFut.get();
 	}

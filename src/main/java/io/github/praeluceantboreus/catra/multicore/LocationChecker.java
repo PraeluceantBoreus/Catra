@@ -14,17 +14,13 @@ public class LocationChecker implements Callable<Boolean>
 	boolean atmoW;
 	boolean groundW;
 
-	public LocationChecker(HashSet<String> atmospherelist, HashSet<String> groundlist, boolean isAtmoWhite, boolean isGroundWhite)
+	public LocationChecker(HashSet<String> atmospherelist, HashSet<String> groundlist, boolean isAtmoWhite, boolean isGroundWhite, Location loc)
 	{
 		this.atmospherelist = atmospherelist;
 		this.groundlist = groundlist;
+		this.loc = loc;
 		atmoW = isAtmoWhite;
 		groundW = isGroundWhite;
-	}
-
-	public void setLoc(Location loc)
-	{
-		this.loc = loc;
 	}
 
 	@Override
@@ -38,6 +34,7 @@ public class LocationChecker implements Callable<Boolean>
 				String ground = loc.clone().add(0, -1, 0).getBlock().getType().toString();
 				if ((groundW && groundlist.contains(ground)) || !groundW && !groundlist.contains(ground))
 				{
+					System.out.println(loc + " is safe");
 					return true;
 				}
 			}

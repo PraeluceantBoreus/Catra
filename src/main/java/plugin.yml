@@ -6,3 +6,5 @@ commands:
   regen:
     description: async
     usage: /async
+  sp:
+    description: 
