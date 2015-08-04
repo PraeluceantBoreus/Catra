@@ -147,12 +147,35 @@ public class CatraPlugin extends JavaPlugin
 		getConfig().addDefault("trader.registered", new String[0]);
 		{
 			ArrayList<Material> list = new ArrayList<>();
-			list.add(Material.GRASS);
 			list.add(Material.STONE);
+			list.add(Material.GRASS);
+			list.add(Material.DIRT);
 			list.add(Material.COBBLESTONE);
 			list.add(Material.WOOD);
 			list.add(Material.SAND);
-			list.add(Material.NETHERRACK);
+			list.add(Material.GRAVEL);
+			list.add(Material.GOLD_ORE);
+			list.add(Material.IRON_ORE);
+			list.add(Material.COAL_ORE);
+			list.add(Material.LOG);
+			list.add(Material.LOG_2);
+			list.add(Material.LEAVES);
+			list.add(Material.LEAVES_2);
+			list.add(Material.SPONGE);
+			list.add(Material.GLASS);
+			list.add(Material.LAPIS_ORE);
+			list.add(Material.LAPIS_BLOCK);
+			list.add(Material.DISPENSER);
+			list.add(Material.SANDSTONE);
+			list.add(Material.NOTE_BLOCK);
+			list.add(Material.BED_BLOCK);
+			list.add(Material.WOOL);
+			list.add(Material.GOLD_BLOCK);
+			list.add(Material.IRON_BLOCK);
+			list.add(Material.DOUBLE_STEP);
+			list.add(Material.DOUBLE_STONE_SLAB2);
+			list.add(Material.STEP);
+			list.add(Material.BRICK);
 			ArrayList<String> listString = new ArrayList<>();
 			for (Material m : list)
 				listString.add(m.toString());
