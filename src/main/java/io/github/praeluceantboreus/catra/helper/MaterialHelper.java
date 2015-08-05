@@ -112,18 +112,31 @@ public class MaterialHelper
 		write(new HashSet<>(Arrays.asList(Material.values())), "all", plugin);
 	}
 
+	@SuppressWarnings("deprecation")
 	private static void write(HashSet<Material> materials, String filename, Plugin plugin)
 	{
 		File out = new File(plugin.getDataFolder() + File.separator + "materials" + File.separator + filename);
 		if (!out.getParentFile().exists())
 			out.getParentFile().mkdirs();
+		int greatestlength = 0;
+		for (Material mat : materials)
+			if (mat.toString().length() > greatestlength)
+				greatestlength = mat.toString().length();
 		try (FileWriter fw = new FileWriter(out))
 		{
 			for (Material material : materials)
-				fw.write(material + "\n");
+				fw.write(material + getSpaces(greatestlength - material.toString().length() + 3) + material.getId() + "\n");
 		} catch (IOException e)
 		{
 			e.printStackTrace();
 		}
+	}
+
+	private static String getSpaces(int amount)
+	{
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < amount; i++)
+			sb.append(" ");
+		return sb.toString();
 	}
 }
