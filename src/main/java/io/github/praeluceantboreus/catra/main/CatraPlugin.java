@@ -1,5 +1,6 @@
 package io.github.praeluceantboreus.catra.main;
 
+import io.github.praeluceantboreus.catra.helper.MaterialHelper;
 import io.github.praeluceantboreus.catra.multicore.ClickListener;
 import io.github.praeluceantboreus.catra.multicore.LocationChecker;
 import io.github.praeluceantboreus.catra.serialize.Coords;
@@ -60,6 +61,7 @@ public class CatraPlugin extends JavaPlugin
 		genConfig();
 		reloadConfig();
 		getServer().getPluginManager().registerEvents(new ClickListener(this), this);
+		MaterialHelper.writeAll(this);
 		coordinateManager = Coords.deserialize(getConfig().getConfigurationSection("worlds"), getServer());
 		offers = new HashMap<>();
 		atmospherelist = new HashSet<String>(getConfig().getStringList("trader.atmosphere.list"));
