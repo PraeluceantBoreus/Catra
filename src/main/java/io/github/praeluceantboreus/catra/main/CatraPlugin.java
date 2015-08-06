@@ -120,13 +120,6 @@ public class CatraPlugin extends JavaPlugin
 			lastGen = 0;
 			return true;
 		}
-		case "sp":
-		{
-			if (args.length < 3 || !(sender instanceof Player))
-				return false;
-			Location loc = new Location(((Player) sender).getLocation().getWorld(), Integer.parseInt(args[0]), Integer.parseInt(args[1]), Integer.parseInt(args[2]));
-			((Player) sender).getWorld().spawnEntity(loc, EntityType.COW);
-		}
 		default:
 			return false;
 		}
