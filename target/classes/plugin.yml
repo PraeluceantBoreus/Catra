@@ -1,8 +1,0 @@
-name: Catra
-version: 0.0.3-neptunium
-author: Richard Stöckl
-main: io.github.praeluceantboreus.catra.main.CatraPlugin
-commands:
-  regen:
-    description: [DEBUG] generates new traders
-    usage: /regen
